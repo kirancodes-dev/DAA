@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Algoverse // Interactive Pathfinding & Maze Engine</title>
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header glass">
+      <div class="logo-area">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="logo-text">
+          <h1>ALGOVERSE</h1>
+          <span class="logo-tagline">Pathfinding & Maze Engine</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-presentation" class="btn btn-secondary flex-center" style="margin-right: 0.6rem;">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" style="margin-right: 0.4rem;">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          Presentation Slides
+        </button>
+        <button id="btn-tutorial" class="btn btn-secondary flex-center">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" style="margin-right: 0.4rem;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          Quick Guide
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <!-- Sidebar Control Panel -->
+      <aside class="sidebar-panel glass">
+        <div class="panel-section">
+          <h2>
+            <svg class="section-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            1. Select Algorithm
+          </h2>
+          <div class="select-wrapper">
+            <select id="select-algo">
+              <option value="astar">A* Search (Optimal & Smart)</option>
+              <option value="dijkstra">Dijkstra's Algorithm (Optimal)</option>
+              <option value="bfs">Breadth-First Search (Shortest Path)</option>
+              <option value="dfs">Depth-First Search (Backtracking)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2>
+            <svg class="section-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            2. Maze & Terrain
+          </h2>
+          <div class="select-wrapper">
+            <select id="select-maze">
+              <option value="recursive-division">Recursive Division (Chambers)</option>
+              <option value="dfs-backtrack">Randomized DFS (Winding Corridor)</option>
+              <option value="random-weight">Muddy Swamp (Random Weights)</option>
+              <option value="random-wall">Scattered Wall Noise (30% density)</option>
+            </select>
+          </div>
+          <button id="btn-generate-maze" class="btn btn-secondary w-100 mt-2">Generate Maze</button>
+        </div>
+
+        <div class="panel-section">
+          <h2>
+            <svg class="section-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M12 20h9M3 20v-8a2 2 0 0 1 2-2h4M3 12h6M3 8V4a2 2 0 0 1 2-2h4M19 16V4a2 2 0 0 0-2-2h-4M13 8h6M13 12h6"></path>
+            </svg>
+            3. Paint Brush Mode
+          </h2>
+          <div class="brush-toggle">
+            <button id="brush-wall" class="btn brush-btn active flex-center" data-mode="wall">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                <rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" fill-opacity="0.3"></rect>
+              </svg>
+              Draw Wall
+            </button>
+            <button id="brush-weight" class="btn brush-btn flex-center" data-mode="weight">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+              Draw Weight
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2>
+            <svg class="section-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            4. Execution Speed
+          </h2>
+          <div class="speed-control">
+            <input type="range" id="speed-slider" min="1" max="4" value="3" step="1">
+            <div class="speed-labels">
+              <span>Slow</span>
+              <span>Medium</span>
+              <span>Fast</span>
+              <span>Instant</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button id="btn-run" class="btn btn-primary w-100 flex-center">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            Visualize Algorithm
+          </button>
+          <div class="btn-group">
+            <button id="btn-clear-path" class="btn btn-secondary flex-center">Clear Path</button>
+            <button id="btn-clear-all" class="btn btn-danger flex-center">Clear Board</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Grid Visualizer & Workspace Panel -->
+      <section class="grid-panel glass">
+        <!-- Legend Bar -->
+        <div class="legend-bar">
+          <div class="legend-item">
+            <div class="legend-node node-start"></div>
+            <span>Start Node</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-node node-target"></div>
+            <span>Target Node</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-node node-unvisited"></div>
+            <span>Unvisited</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-node node-wall"></div>
+            <span>Wall</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-node node-weight">
+              <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" width="10" height="10">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+            </div>
+            <span>Weight (Cost: 5)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-node node-visited"></div>
+            <span>Visited Node</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-node node-shortest-path"></div>
+            <span>Shortest Path</span>
+          </div>
+        </div>
+
+        <!-- Interactive Grid Container -->
+        <div id="grid-container" class="grid-container">
+          <!-- Dynamically populated via JS -->
+        </div>
+
+        <!-- Dashboard / Diagnostics panel -->
+        <div class="dashboard-panel">
+          <div class="metric-card">
+            <span class="metric-label">Execution Time</span>
+            <span id="metric-time" class="metric-value">0 <span class="metric-unit">ms</span></span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Nodes Visited</span>
+            <span id="metric-visited" class="metric-value">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Shortest Path Length</span>
+            <span id="metric-length" class="metric-value">0 <span class="metric-unit">nodes</span></span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Total Cost</span>
+            <span id="metric-cost" class="metric-value">0</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Algorithm Explanation Panel -->
+    <footer class="info-panel glass">
+      <div id="algo-info-card" class="algo-info-card">
+        <div class="info-header">
+          <h3 id="info-algo-name">A* Search Algorithm</h3>
+          <div class="complexities">
+            <div class="complexity-badge time">Time: <code id="info-time-complexity">O((V + E) log V)</code></div>
+            <div class="complexity-badge space">Space: <code id="info-space-complexity">O(V)</code></div>
+          </div>
+        </div>
+        <p id="info-algo-desc">
+          A* (A-Star) is a heuristic-guided pathfinding algorithm. It is highly efficient because it estimates the distance to the target using a heuristic function (Manhattan Distance on grid), minimizing the total cost: <code>f(n) = g(n) + h(n)</code>.
+        </p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Interactive Tutorial Modal -->
+  <div id="tutorial-modal" class="modal-overlay hidden">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h2>Welcome to Algoverse! 🌌</h2>
+        <button id="modal-close" class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>This sandbox lets you explore and visualize classic graph algorithms running in real-time. Here is how to use it:</p>
+        <ul class="tutorial-list">
+          <li><strong>Drag & Drop:</strong> Drag the green star <span class="badge-icon emerald">★</span> to change the starting location, and the red star <span class="badge-icon coral">★</span> to set the destination.</li>
+          <li><strong>Draw Terrain:</strong> Click and drag on empty cells to paint **Walls** (impassable barriers) or **Weights** (slows movement down, resembling swamps or mud).</li>
+          <li><strong>Generate Mazes:</strong> Use the Maze & Terrain dropdown to generate complex labyrinth systems like Recursive Division or randomized DFS.</li>
+          <li><strong>Run and Compare:</strong> Pick an algorithm (A*, Dijkstra, BFS, DFS) and click **Visualize Algorithm** to see it seek the shortest path!</li>
+        </ul>
+        <div class="modal-tip">
+          <strong>Tip:</strong> Holding the <code>W</code> key on your keyboard while dragging automatically switches the brush to **Weight mode**. Pressing <code>C</code> clears the path!
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="modal-btn-start" class="btn btn-primary">Start Exploring</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Presentation Modal (8 Slides) -->
+  <div id="presentation-modal" class="modal-overlay hidden">
+    <div class="presentation-content presentation-card glass">
+      
+      <!-- Logo in Top Right of All Pages -->
+      <div class="presentation-header-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="slide-logo-icon" width="20" height="20">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>ALGOVERSE ENGINE</span>
+      </div>
+
+      <!-- Close Button -->
+      <button id="presentation-close" class="modal-close-btn presentation-close-btn">&times;</button>
+
+      <!-- Slides Wrapper -->
+      <div class="slides-wrapper">
+        
+        <!-- Slide 1: Welcome & Team Names -->
+        <div class="slide slide-active" data-slide="1">
+          <div class="slide-content-center">
+            <span class="slide-tag">PROJECT DEMONSTRATION</span>
+            <h2 class="slide-title-large">Algoverse Engine</h2>
+            <p class="slide-subtitle">Interactive Pathfinding &amp; Maze Generation Sandbox</p>
+            
+            <div class="slide-team-box">
+              <span class="team-label">PRESENTED BY:</span>
+              <div class="team-names">
+                <input type="text" class="team-input" value="Student Name 1" placeholder="Enter Name 1">
+                <input type="text" class="team-input" value="Student Name 2" placeholder="Enter Name 2">
+              </div>
+              <span class="team-label-sub">Department of Computer Science &amp; Engineering</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 2: Core Objectives -->
+        <div class="slide" data-slide="2">
+          <h2 class="slide-title">1. Project Objectives &amp; Goals</h2>
+          <div class="slide-grid-2">
+            <div class="slide-card">
+              <h3>Visual Exploration</h3>
+              <p>Turn abstract mathematical theories of graph traversal into tangible, real-time graphical representations.</p>
+            </div>
+            <div class="slide-card">
+              <h3>Sandbox Testing</h3>
+              <p>Create barriers (Walls) and weighted obstacles (Muddy Swamp) to study how paths dynamically bend around cost functions.</p>
+            </div>
+            <div class="slide-card">
+              <h3>Performance Profiling</h3>
+              <p>Directly measure algorithmic efficiency using live execution clocks, nodes visited count, and shortest path cost comparisons.</p>
+            </div>
+            <div class="slide-card">
+              <h3>Educational Utility</h3>
+              <p>Build a sandbox workspace for educators and students to investigate pathfinding heuristics and graph mechanics.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 3: Application Architecture -->
+        <div class="slide" data-slide="3">
+          <h2 class="slide-title">2. System Architecture</h2>
+          <div class="slide-layout-wide">
+            <div class="slide-timeline">
+              <div class="timeline-step">
+                <div class="step-num">01</div>
+                <div>
+                  <h4>Zero-Dependency Core</h4>
+                  <p>Developed using raw HTML5 grids and vanilla ES6+ Javascript. Zero framework overhead yields rendering speeds up to 60fps.</p>
+                </div>
+              </div>
+              <div class="timeline-step">
+                <div class="step-num">02</div>
+                <div>
+                  <h4>Stateful Node Grid Model</h4>
+                  <p>Each cell represents a dynamic graph node storing wall properties, heuristic costs, accumulated path weights, and search history states.</p>
+                </div>
+              </div>
+              <div class="timeline-step">
+                <div class="step-num">03</div>
+                <div>
+                  <h4>Hardware-Accelerated UI</h4>
+                  <p>Uses modern CSS3 grid and keyframe animations combined with hardware translation handles for lag-free node ripples and glowing paths.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 4: A* Pathfinder -->
+        <div class="slide" data-slide="4">
+          <h2 class="slide-title">3. Heuristic Solver: A* Search</h2>
+          <div class="slide-grid-left">
+            <div class="formula-card">
+              <div class="formula-box">f(n) = g(n) + h(n)</div>
+              <div style="margin-top: 1rem; font-size: 0.8rem; line-height: 1.5;">
+                <p><strong>g(n):</strong> Traversal cost from start to current node.</p>
+                <p><strong>h(n):</strong> Heuristic estimation to target (using Manhattan Distance).</p>
+              </div>
+            </div>
+            <div class="slide-details-list">
+              <ul>
+                <li><strong>Optimal &amp; Admissible:</strong> Since Manhattan distance never overestimates the actual distance, A* is guaranteed to find the shortest path.</li>
+                <li><strong>Min-Heap Implementation:</strong> Optimized using a custom Binary Min-Heap Priority Queue to extract minimum nodes in <code>O(log V)</code>.</li>
+                <li><strong>Complexities:</strong>
+                  <ul>
+                    <li>Time Complexity: <code>O((V + E) log V)</code></li>
+                    <li>Space Complexity: <code>O(V)</code></li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 5: Dijkstra's Algorithm -->
+        <div class="slide" data-slide="5">
+          <h2 class="slide-title">4. Weighted Solver: Dijkstra's Algorithm</h2>
+          <div class="slide-grid-left">
+            <div class="formula-card">
+              <div class="formula-box">h(n) = 0</div>
+              <div style="margin-top: 1rem; font-size: 0.8rem; line-height: 1.5;">
+                <p>Dijkstra's acts as an uninformed search. It explores in uniform circular waves, comparing cost purely based on distance from start node.</p>
+              </div>
+            </div>
+            <div class="slide-details-list">
+              <ul>
+                <li><strong>Weighted Pathfinder:</strong> Excellent for routing through terrains. Highlights how paths curve to bypass weighted nodes.</li>
+                <li><strong>Swamp Mechanics:</strong> Highlights the concept of edge weights. In the sandbox, standard nodes cost 1, whereas weight mud nodes cost 5.</li>
+                <li><strong>Complexities:</strong>
+                  <ul>
+                    <li>Time Complexity: <code>O((V + E) log V)</code></li>
+                    <li>Space Complexity: <code>O(V)</code></li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 6: BFS vs DFS -->
+        <div class="slide" data-slide="6">
+          <h2 class="slide-title">5. Unweighted Traversals: BFS &amp; DFS</h2>
+          <div class="comparison-table-wrapper">
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th>Characteristic</th>
+                  <th>Breadth-First Search (BFS)</th>
+                  <th>Depth-First Search (DFS)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Data Structure</strong></td>
+                  <td>FIFO Queue</td>
+                  <td>LIFO Stack / Recursion</td>
+                </tr>
+                <tr>
+                  <td><strong>Exploration Style</strong></td>
+                  <td>Concentric ripples, exploring layer-by-layer</td>
+                  <td>Winding trails, exploring deep branches first</td>
+                </tr>
+                <tr>
+                  <td><strong>Path Optimality</strong></td>
+                  <td>Optimal for unweighted steps (ignores weights)</td>
+                  <td>Non-optimal (can construct extremely long paths)</td>
+                </tr>
+                <tr>
+                  <td><strong>Time Complexity</strong></td>
+                  <td><code>O(V + E)</code></td>
+                  <td><code>O(V + E)</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Slide 7: Maze Generators -->
+        <div class="slide" data-slide="7">
+          <h2 class="slide-title">6. Maze &amp; Terrain Engineering</h2>
+          <div class="slide-grid-2">
+            <div class="slide-card">
+              <h3>Recursive Division</h3>
+              <p><strong>Divide-and-Conquer:</strong> Recursively splits chambers horizontally or vertically, drawing solid wall divisions while keeping one cell open as a passage.</p>
+            </div>
+            <div class="slide-card">
+              <h3>Randomized DFS Carver</h3>
+              <p><strong>Labyrinth Backtracker:</strong> Fills the grid with walls, then backtracks using a stack to break down walls two steps away. Creates winding corridors with exactly one solution path.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 8: Technical Innovation & Summary -->
+        <div class="slide" data-slide="8">
+          <h2 class="slide-title">7. Summary &amp; Core Highlights</h2>
+          <div class="summary-points-grid">
+            <div class="summary-point">
+              <h4>Instant Path Recalculation</h4>
+              <p>Recalculates solution paths instantly (in 0ms) when start/target nodes are dragged after an initial search, illustrating real-time path warps.</p>
+            </div>
+            <div class="summary-point">
+              <h4>Custom Data Structures</h4>
+              <p>Avoids slow JavaScript array sort operations. Employs a custom Binary Min-Heap Priority Queue for optimal pathfinding performance.</p>
+            </div>
+            <div class="summary-point">
+              <h4>Responsive Interface</h4>
+              <p>Modular glassmorphic CSS rules adapt to screen sizes from widescreen laptops to compact mobile viewports.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Slide Controls Footer -->
+      <div class="presentation-controls">
+        <button id="slide-prev" class="btn btn-secondary slide-nav-btn">&larr; Previous</button>
+        <div class="slide-dots">
+          <!-- Dots generated dynamically via JS -->
+        </div>
+        <button id="slide-next" class="btn btn-primary slide-nav-btn">Next &rarr;</button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- JS Logic -->
+  <script src="script.js"></script>
+</body>
+</html>
