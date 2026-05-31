@@ -1,1070 +1,862 @@
 /* ==========================================================================
-   Algoverse Pathfinding & Maze Engine
+   DisciplineX — App Logic
    ========================================================================== */
 
-// Grid Sizing Configuration
-const ROWS = 22;
-const COLS = 50;
+// ==========================================
+// State & Constants
+// ==========================================
+const STORAGE_KEY = 'disciplinex_data';
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_FULL = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const MEAL_ICONS = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' };
 
-// Grid State Variables
-let grid = [];
-let startNode = { row: 5, col: 10 };
-let targetNode = { row: 15, col: 40 };
+let currentDate = new Date();
+let currentTab = 'dashboard';
+let currentMealPlanDay = 'monday';
+let deferredInstallPrompt = null;
 
-// Interaction State Variables
-let isMouseDown = false;
-let isDraggingStart = false;
-let isDraggingTarget = false;
-let currentBrushMode = "wall"; // "wall" or "weight"
-let isRunning = false;
-let isSolved = false;
-let activeAlgorithm = "astar";
+// Motivational quotes
+const QUOTES = [
+  { text: "The only bad workout is the one that didn't happen.", author: "Unknown" },
+  { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
+  { text: "Take care of your body. It's the only place you have to live.", author: "Jim Rohn" },
+  { text: "The pain you feel today will be the strength you feel tomorrow.", author: "Arnold Schwarzenegger" },
+  { text: "Don't wish for it. Work for it.", author: "Unknown" },
+  { text: "Your body can stand almost anything. It's your mind you have to convince.", author: "Unknown" },
+  { text: "Success is the sum of small efforts repeated day in and day out.", author: "Robert Collier" },
+  { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+  { text: "Strive for progress, not perfection.", author: "Unknown" },
+  { text: "Wake up with determination. Go to bed with satisfaction.", author: "Unknown" },
+  { text: "The difference between try and triumph is a little umph.", author: "Marvin Phillips" },
+  { text: "A year from now you'll wish you had started today.", author: "Karen Lamb" },
+  { text: "It's not about having time, it's about making time.", author: "Unknown" },
+  { text: "Motivation gets you going, but discipline keeps you growing.", author: "John C. Maxwell" },
+  { text: "Small daily improvements over time lead to stunning results.", author: "Robin Sharma" },
+  { text: "Eat clean. Train dirty.", author: "Unknown" },
+  { text: "You don't have to be extreme, just consistent.", author: "Unknown" },
+  { text: "The body achieves what the mind believes.", author: "Napoleon Hill" },
+  { text: "Push harder than yesterday if you want a different tomorrow.", author: "Unknown" },
+  { text: "Every workout is progress. Every meal is a choice. Choose wisely.", author: "Unknown" }
+];
 
-// Speeds mapping (milliseconds per step)
-const SPEED_MAP = {
-  1: 80,  // Slow
-  2: 30,  // Medium
-  3: 8,   // Fast
-  4: 0    // Instant (handled synchronously)
-};
-let currentSpeed = SPEED_MAP[3];
-
-// Complexity & description dictionary
-const ALGO_DATA = {
-  astar: {
-    name: "A* Search Algorithm",
-    time: "O((V + E) log V)",
-    space: "O(V)",
-    desc: "A* (A-Star) is a heuristic-guided pathfinding algorithm. It estimates the distance to the target using a heuristic (Manhattan Distance), minimizing: <code>f(n) = g(n) + h(n)</code>. It guarantees the shortest path and is faster than Dijkstra in most cases."
-  },
-  dijkstra: {
-    name: "Dijkstra's Algorithm",
-    time: "O((V + E) log V)",
-    space: "O(V)",
-    desc: "Dijkstra's is a classic greedy algorithm for finding shortest paths in weighted graphs. It explores nodes strictly in order of their accumulated distance from start. It guarantees the shortest path."
-  },
-  bfs: {
-    name: "Breadth-First Search (BFS)",
-    time: "O(V + E)",
-    space: "O(V)",
-    desc: "BFS explores nodes layer-by-layer (wavefront ripple). It is optimal for unweighted graphs (guarantees shortest path in steps), but it cannot handle terrain weights (treats all costs as 1)."
-  },
-  dfs: {
-    name: "Depth-First Search (DFS)",
-    time: "O(V + E)",
-    space: "O(V)",
-    desc: "DFS explores as deep as possible along each branch before backtracking. It uses a stack structure. It does <strong>not</strong> guarantee the shortest path and can produce highly winding routes."
-  }
-};
-
-/* ==========================================================================
-   Priority Queue (Min-Heap) for A* & Dijkstra
-   ========================================================================== */
-class MinHeap {
-  constructor() {
-    this.heap = [];
-  }
-
-  push(node) {
-    this.heap.push(node);
-    this.bubbleUp(this.heap.length - 1);
-  }
-
-  pop() {
-    if (this.heap.length === 0) return null;
-    const min = this.heap[0];
-    const end = this.heap.pop();
-    if (this.heap.length > 0) {
-      this.heap[0] = end;
-      this.sinkDown(0);
-    }
-    return min;
-  }
-
-  // Compare function considering f-scores, breaking ties with h-scores (heuristic to target)
-  compare(a, b) {
-    const scoreA = a.f !== undefined ? a.f : a.distance;
-    const scoreB = b.f !== undefined ? b.f : b.distance;
-    if (scoreA !== scoreB) {
-      return scoreA < scoreB;
-    }
-    if (a.h !== undefined && b.h !== undefined) {
-      return a.h < b.h;
-    }
-    return false;
-  }
-
-  bubbleUp(index) {
-    const element = this.heap[index];
-    while (index > 0) {
-      let parentIndex = Math.floor((index - 1) / 2);
-      let parent = this.heap[parentIndex];
-      if (this.compare(element, parent)) {
-        this.heap[index] = parent;
-        index = parentIndex;
-      } else {
-        break;
-      }
-    }
-    this.heap[index] = element;
-  }
-
-  sinkDown(index) {
-    const length = this.heap.length;
-    const element = this.heap[index];
-
-    while (true) {
-      let leftChildIndex = 2 * index + 1;
-      let rightChildIndex = 2 * index + 2;
-      let leftChild, rightChild;
-      let swap = null;
-
-      if (leftChildIndex < length) {
-        leftChild = this.heap[leftChildIndex];
-        if (this.compare(leftChild, element)) {
-          swap = leftChildIndex;
-        }
-      }
-
-      if (rightChildIndex < length) {
-        rightChild = this.heap[rightChildIndex];
-        const compareTarget = swap === null ? element : leftChild;
-        if (this.compare(rightChild, compareTarget)) {
-          swap = rightChildIndex;
-        }
-      }
-
-      if (swap === null) break;
-      this.heap[index] = this.heap[swap];
-      index = swap;
-    }
-    this.heap[index] = element;
-  }
-
-  isEmpty() {
-    return this.heap.length === 0;
-  }
+// ==========================================
+// Data Management
+// ==========================================
+function getDefaultData() {
+  return {
+    settings: {
+      name: '',
+      weightUnit: 'kg', // 'kg' or 'lbs'
+      goalWorkouts: 3,
+      goalMeals: 4
+    },
+    workouts: {},   // { "2026-05-31": [{id, name, sets, reps, weight, notes, timestamp}] }
+    meals: {},      // { "2026-05-31": [{id, name, portion, type, notes, timestamp}] }
+    mealPlan: {     // { monday: [{id, name, type, portion}], ... }
+      monday: [], tuesday: [], wednesday: [], thursday: [],
+      friday: [], saturday: [], sunday: []
+    },
+    mealPlanChecked: {}, // { "2026-05-31": { mealPlanItemId: true } }
+    streaks: {}     // { "2026-05-31": true }
+  };
 }
 
-/* ==========================================================================
-   Grid Initialization & Mouse Listeners
-   ========================================================================== */
-function initGrid() {
-  const container = document.getElementById("grid-container");
-  container.innerHTML = "";
-  container.style.setProperty("--grid-rows", ROWS);
-  container.style.setProperty("--grid-cols", COLS);
-  grid = [];
-
-  for (let r = 0; r < ROWS; r++) {
-    const rowArray = [];
-    for (let c = 0; c < COLS; c++) {
-      const isStart = (r === startNode.row && c === startNode.col);
-      const isTarget = (r === targetNode.row && c === targetNode.col);
-
-      // Create DOM element
-      const element = document.createElement("div");
-      element.className = "node";
-      element.id = `node-${r}-${c}`;
-      
-      // Node data structure
-      const node = {
-        row: r,
-        col: c,
-        isStart,
-        isTarget,
-        isWall: false,
-        weight: 1, // weight cost (1 = default, 5 = weighted)
-        isVisited: false,
-        isPath: false,
-        distance: Infinity,
-        g: Infinity,
-        h: Infinity,
-        f: Infinity,
-        previousNode: null,
-        domElement: element
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Merge with defaults for missing keys
+      const defaults = getDefaultData();
+      return {
+        settings: { ...defaults.settings, ...parsed.settings },
+        workouts: parsed.workouts || {},
+        meals: parsed.meals || {},
+        mealPlan: { ...defaults.mealPlan, ...parsed.mealPlan },
+        mealPlanChecked: parsed.mealPlanChecked || {},
+        streaks: parsed.streaks || {}
       };
-
-      if (isStart) element.classList.add("node-start");
-      if (isTarget) element.classList.add("node-target");
-
-      // Event listeners for painting and dragging
-      element.addEventListener("mousedown", (e) => handleMouseDown(node, e));
-      element.addEventListener("mouseenter", () => handleMouseEnter(node));
-      element.addEventListener("mouseup", () => handleMouseUp());
-
-      container.appendChild(element);
-      rowArray.push(node);
     }
-    grid.push(rowArray);
+  } catch (e) {
+    console.error('Error loading data:', e);
+  }
+  return getDefaultData();
+}
+
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  } catch (e) {
+    console.error('Error saving data:', e);
   }
 }
 
-// Mouse Handlers
-function handleMouseDown(node, event) {
-  if (isRunning) return;
-  event.preventDefault();
-  isMouseDown = true;
+let appData = loadData();
 
-  if (node.isStart) {
-    isDraggingStart = true;
-  } else if (node.isTarget) {
-    isDraggingTarget = true;
-  } else {
-    toggleWallOrWeight(node);
-  }
+// ==========================================
+// Utility Helpers
+// ==========================================
+function formatDateKey(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function handleMouseEnter(node) {
-  if (!isMouseDown || isRunning) return;
-
-  if (isDraggingStart) {
-    if (node.isTarget || node.isWall) return;
-    // Remove previous start classes & metadata
-    grid[startNode.row][startNode.col].isStart = false;
-    grid[startNode.row][startNode.col].domElement.classList.remove("node-start");
-    
-    startNode = { row: node.row, col: node.col };
-    node.isStart = true;
-    node.isWall = false;
-    node.weight = 1;
-    node.domElement.classList.remove("node-wall", "node-weight");
-    node.domElement.classList.add("node-start");
-
-    if (isSolved) triggerInstantRecalculate();
-  } else if (isDraggingTarget) {
-    if (node.isStart || node.isWall) return;
-    // Remove previous target classes & metadata
-    grid[targetNode.row][targetNode.col].isTarget = false;
-    grid[targetNode.row][targetNode.col].domElement.classList.remove("node-target");
-    
-    targetNode = { row: node.row, col: node.col };
-    node.isTarget = true;
-    node.isWall = false;
-    node.weight = 1;
-    node.domElement.classList.remove("node-wall", "node-weight");
-    node.domElement.classList.add("node-target");
-
-    if (isSolved) triggerInstantRecalculate();
-  } else {
-    toggleWallOrWeight(node);
-  }
-}
-
-function handleMouseUp() {
-  isMouseDown = false;
-  isDraggingStart = false;
-  isDraggingTarget = false;
-}
-
-// Toggle Wall or Weight cost
-function toggleWallOrWeight(node) {
-  if (node.isStart || node.isTarget) return;
-
-  if (currentBrushMode === "wall") {
-    node.isWall = !node.isWall;
-    node.weight = 1;
-    node.domElement.classList.remove("node-weight");
-    if (node.isWall) {
-      node.domElement.classList.add("node-wall");
-    } else {
-      node.domElement.classList.remove("node-wall");
-    }
-  } else if (currentBrushMode === "weight") {
-    node.isWall = false;
-    node.domElement.classList.remove("node-wall");
-    if (node.weight === 1) {
-      node.weight = 5;
-      node.domElement.classList.add("node-weight");
-    } else {
-      node.weight = 1;
-      node.domElement.classList.remove("node-weight");
-    }
-  }
-
-  // Clear solved path if modifications occur
-  if (isSolved) {
-    clearPathAndVisited();
-  }
-}
-
-// Key listeners for keyboard shortcuts
-window.addEventListener("keydown", (e) => {
-  const presModal = document.getElementById("presentation-modal");
-  if (presModal && !presModal.classList.contains("hidden")) {
-    if (e.key === "ArrowRight") {
-      if (currentSlide < TOTAL_SLIDES) {
-        changeSlide(currentSlide + 1);
-      } else {
-        presModal.classList.add("hidden");
-      }
-      return;
-    }
-    if (e.key === "ArrowLeft") {
-      if (currentSlide > 1) {
-        changeSlide(currentSlide - 1);
-      }
-      return;
-    }
-  }
-
-  if (e.key === "w" || e.key === "W") {
-    currentBrushMode = "weight";
-    updateBrushButtons();
-  }
-  if (e.key === "c" || e.key === "C") {
-    clearPathAndVisited();
-  }
-});
-
-window.addEventListener("keyup", (e) => {
-  if (e.key === "w" || e.key === "W") {
-    currentBrushMode = "wall";
-    updateBrushButtons();
-  }
-});
-
-function updateBrushButtons() {
-  const btnWall = document.getElementById("brush-wall");
-  const btnWeight = document.getElementById("brush-weight");
-  if (currentBrushMode === "wall") {
-    btnWall.classList.add("active");
-    btnWeight.classList.remove("active");
-  } else {
-    btnWeight.classList.add("active");
-    btnWall.classList.remove("active");
-  }
-}
-
-/* ==========================================================================
-   Grid Helper Utilities
-   ========================================================================== */
-function clearAll() {
-  if (isRunning) return;
-  isSolved = false;
+function formatDisplayDate(date) {
+  const today = new Date();
+  const d = new Date(date);
+  if (formatDateKey(d) === formatDateKey(today)) return 'Today';
   
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const node = grid[r][c];
-      node.isWall = false;
-      node.weight = 1;
-      node.isVisited = false;
-      node.isPath = false;
-      node.distance = Infinity;
-      node.g = Infinity;
-      node.h = Infinity;
-      node.f = Infinity;
-      node.previousNode = null;
-
-      // Clean classes
-      node.domElement.className = "node";
-      if (node.isStart) node.domElement.classList.add("node-start");
-      if (node.isTarget) node.domElement.classList.add("node-target");
-    }
-  }
-  resetMetrics();
-}
-
-function clearPathAndVisited() {
-  if (isRunning) return;
-  isSolved = false;
-
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const node = grid[r][c];
-      node.isVisited = false;
-      node.isPath = false;
-      node.distance = Infinity;
-      node.g = Infinity;
-      node.h = Infinity;
-      node.f = Infinity;
-      node.previousNode = null;
-
-      node.domElement.classList.remove("node-visited", "node-visited-weight", "node-shortest-path", "node-path-weight");
-    }
-  }
-  resetMetrics();
-}
-
-function resetMetrics() {
-  document.getElementById("metric-time").innerHTML = `0 <span class="metric-unit">ms</span>`;
-  document.getElementById("metric-visited").innerText = "0";
-  document.getElementById("metric-length").innerHTML = `0 <span class="metric-unit">nodes</span>`;
-  document.getElementById("metric-cost").innerText = "0";
-}
-
-function getNeighbors(node) {
-  const neighbors = [];
-  const { row, col } = node;
-
-  if (row > 0) neighbors.push(grid[row - 1][col]);
-  if (row < ROWS - 1) neighbors.push(grid[row + 1][col]);
-  if (col > 0) neighbors.push(grid[row][col - 1]);
-  if (col < COLS - 1) neighbors.push(grid[row][col + 1]);
-
-  return neighbors.filter(neighbor => !neighbor.isWall);
-}
-
-// Manhattan distance heuristic
-function getManhattanDistance(nodeA, nodeB) {
-  return Math.abs(nodeA.row - nodeB.row) + Math.abs(nodeA.col - nodeB.col);
-}
-
-// Utility delay generator
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-/* ==========================================================================
-   Pathfinding Algorithms
-   ========================================================================== */
-
-// 1. A* Search
-async function solveAStar(instant = false) {
-  const start = grid[startNode.row][startNode.col];
-  const target = grid[targetNode.row][targetNode.col];
-  const visitedInOrder = [];
-
-  start.distance = 0;
-  start.g = 0;
-  start.h = getManhattanDistance(start, target);
-  start.f = start.g + start.h;
-
-  const openSet = new MinHeap();
-  openSet.push(start);
-
-  while (!openSet.isEmpty()) {
-    const current = openSet.pop();
-
-    if (current.isVisited) continue;
-    current.isVisited = true;
-    visitedInOrder.push(current);
-
-    if (current === target) break;
-
-    // Trigger visual updates asynchronously or instantly
-    if (!current.isStart && !current.isTarget) {
-      if (!instant) {
-        animateNodeVisited(current);
-        await sleep(currentSpeed);
-      }
-    }
-
-    const neighbors = getNeighbors(current);
-    for (const neighbor of neighbors) {
-      if (neighbor.isVisited) continue;
-
-      const tentativeG = current.g + current.weight;
-      if (tentativeG < neighbor.g) {
-        neighbor.previousNode = current;
-        neighbor.g = tentativeG;
-        neighbor.h = getManhattanDistance(neighbor, target);
-        neighbor.distance = tentativeG; // For visualization / metrics equivalence
-        neighbor.f = neighbor.g + neighbor.h;
-        openSet.push(neighbor);
-      }
-    }
-  }
-  return visitedInOrder;
-}
-
-// 2. Dijkstra's Algorithm
-async function solveDijkstra(instant = false) {
-  const start = grid[startNode.row][startNode.col];
-  const target = grid[targetNode.row][targetNode.col];
-  const visitedInOrder = [];
-
-  start.distance = 0;
-  const openSet = new MinHeap();
-  openSet.push(start);
-
-  while (!openSet.isEmpty()) {
-    const current = openSet.pop();
-
-    if (current.isVisited) continue;
-    current.isVisited = true;
-    visitedInOrder.push(current);
-
-    if (current === target) break;
-
-    if (!current.isStart && !current.isTarget) {
-      if (!instant) {
-        animateNodeVisited(current);
-        await sleep(currentSpeed);
-      }
-    }
-
-    const neighbors = getNeighbors(current);
-    for (const neighbor of neighbors) {
-      if (neighbor.isVisited) continue;
-
-      const tentativeDistance = current.distance + neighbor.weight;
-      if (tentativeDistance < neighbor.distance) {
-        neighbor.distance = tentativeDistance;
-        neighbor.previousNode = current;
-        openSet.push(neighbor);
-      }
-    }
-  }
-  return visitedInOrder;
-}
-
-// 3. Breadth-First Search (BFS)
-async function solveBFS(instant = false) {
-  const start = grid[startNode.row][startNode.col];
-  const target = grid[targetNode.row][targetNode.col];
-  const visitedInOrder = [];
-
-  const queue = [start];
-  start.isVisited = true;
-  start.distance = 0;
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    visitedInOrder.push(current);
-
-    if (current === target) break;
-
-    if (!current.isStart && !current.isTarget) {
-      if (!instant) {
-        animateNodeVisited(current);
-        await sleep(currentSpeed);
-      }
-    }
-
-    const neighbors = getNeighbors(current);
-    for (const neighbor of neighbors) {
-      if (!neighbor.isVisited) {
-        // BFS ignores weights internally but metrics calculates total cost traversed
-        neighbor.isVisited = true;
-        neighbor.distance = current.distance + neighbor.weight;
-        neighbor.previousNode = current;
-        queue.push(neighbor);
-      }
-    }
-  }
-  return visitedInOrder;
-}
-
-// 4. Depth-First Search (DFS)
-async function solveDFS(instant = false) {
-  const start = grid[startNode.row][startNode.col];
-  const target = grid[targetNode.row][targetNode.col];
-  const visitedInOrder = [];
-
-  const stack = [start];
-  start.distance = 0;
-
-  while (stack.length > 0) {
-    const current = stack.pop();
-
-    if (current.isVisited) continue;
-    current.isVisited = true;
-    visitedInOrder.push(current);
-
-    if (current === target) break;
-
-    if (!current.isStart && !current.isTarget) {
-      if (!instant) {
-        animateNodeVisited(current);
-        await sleep(currentSpeed);
-      }
-    }
-
-    const neighbors = getNeighbors(current);
-    for (const neighbor of neighbors) {
-      if (!neighbor.isVisited) {
-        neighbor.distance = current.distance + neighbor.weight;
-        neighbor.previousNode = current;
-        stack.push(neighbor);
-      }
-    }
-  }
-  return visitedInOrder;
-}
-
-/* ==========================================================================
-   Visual Animation Handlers
-   ========================================================================== */
-function animateNodeVisited(node) {
-  if (node.weight > 1) {
-    node.domElement.classList.add("node-visited-weight");
-  } else {
-    node.domElement.classList.add("node-visited");
-  }
-}
-
-// Recovers shortest path backwards from target
-function getShortestPathNodes() {
-  const path = [];
-  let current = grid[targetNode.row][targetNode.col];
-  while (current !== null) {
-    path.unshift(current);
-    current = current.previousNode;
-  }
-  // If first node isn't start node, there is no path
-  if (path[0] !== grid[startNode.row][startNode.col]) return [];
-  return path;
-}
-
-// Draw paths
-async function animateShortestPath(pathNodes, instant = false) {
-  let cost = 0;
-  for (let i = 0; i < pathNodes.length; i++) {
-    const node = pathNodes[i];
-    cost += node.weight;
-
-    if (!node.isStart && !node.isTarget) {
-      if (node.weight > 1) {
-        node.domElement.classList.add("node-path-weight");
-      } else {
-        node.domElement.classList.add("node-shortest-path");
-      }
-      if (!instant) await sleep(20);
-    }
-  }
-  updateStatsMetrics(cost, pathNodes.length);
-}
-
-// Render instant runs (e.g. on dragging nodes post-solving)
-function drawInstantVisualization(visitedNodes, pathNodes) {
-  // Paint visited
-  visitedNodes.forEach(node => {
-    if (!node.isStart && !node.isTarget) {
-      animateNodeVisited(node);
-    }
-  });
-
-  // Paint path
-  let cost = 0;
-  pathNodes.forEach(node => {
-    cost += node.weight;
-    if (!node.isStart && !node.isTarget) {
-      if (node.weight > 1) {
-        node.domElement.classList.add("node-path-weight");
-      } else {
-        node.domElement.classList.add("node-shortest-path");
-      }
-    }
-  });
-
-  updateStatsMetrics(cost, pathNodes.length);
-}
-
-function updateStatsMetrics(cost, pathLength) {
-  document.getElementById("metric-length").innerHTML = `${pathLength} <span class="metric-unit">nodes</span>`;
-  document.getElementById("metric-cost").innerText = cost;
-}
-
-/* ==========================================================================
-   Maze Generation Algorithms
-   ========================================================================== */
-
-// Entry maze function
-async function generateMaze() {
-  if (isRunning) return;
-  isRunning = true;
-  clearAll();
-
-  const mazeType = document.getElementById("select-maze").value;
-
-  if (mazeType === "random-wall") {
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const node = grid[r][c];
-        if (node.isStart || node.isTarget) continue;
-        if (Math.random() < 0.3) {
-          node.isWall = true;
-          node.domElement.classList.add("node-wall");
-        }
-      }
-    }
-  } else if (mazeType === "random-weight") {
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const node = grid[r][c];
-        if (node.isStart || node.isTarget) continue;
-        if (Math.random() < 0.25) {
-          node.weight = 5;
-          node.domElement.classList.add("node-weight");
-        }
-      }
-    }
-  } else if (mazeType === "recursive-division") {
-    // Generate outer boundary walls first
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1) {
-          const node = grid[r][c];
-          if (!node.isStart && !node.isTarget) {
-            node.isWall = true;
-            node.domElement.classList.add("node-wall");
-          }
-        }
-      }
-    }
-    // Divide internal region recursively
-    await recursiveDivision(1, ROWS - 2, 1, COLS - 2, "horizontal");
-  } else if (mazeType === "dfs-backtrack") {
-    await dfsBacktrackMaze();
-  }
-
-  isRunning = false;
-}
-
-// 1. Recursive Division
-async function recursiveDivision(rowStart, rowEnd, colStart, colEnd, orientation) {
-  if (rowEnd < rowStart || colEnd < colStart) return;
-
-  if (orientation === "horizontal") {
-    // Choose index where to draw wall
-    const possibleRows = [];
-    for (let r = rowStart + 1; r < rowEnd; r += 2) {
-      possibleRows.push(r);
-    }
-    if (possibleRows.length === 0) return;
-    const rowVal = possibleRows[Math.floor(Math.random() * possibleRows.length)];
-
-    // Choose random gap index
-    const possibleCols = [];
-    for (let c = colStart; c <= colEnd; c += 2) {
-      possibleCols.push(c);
-    }
-    const gapCol = possibleCols[Math.floor(Math.random() * possibleCols.length)];
-
-    for (let c = colStart; c <= colEnd; c++) {
-      if (c === gapCol) continue;
-      const node = grid[rowVal][c];
-      if (node.isStart || node.isTarget) continue;
-      node.isWall = true;
-      node.domElement.classList.add("node-wall");
-      await sleep(5);
-    }
-
-    // Recurse upper and lower divisions
-    await recursiveDivision(rowStart, rowVal - 1, colStart, colEnd, chooseOrientation(rowVal - 1 - rowStart, colEnd - colStart));
-    await recursiveDivision(rowVal + 1, rowEnd, colStart, colEnd, chooseOrientation(rowEnd - (rowVal + 1), colEnd - colStart));
-  } else {
-    // Vertical division
-    const possibleCols = [];
-    for (let c = colStart + 1; c < colEnd; c += 2) {
-      possibleCols.push(c);
-    }
-    if (possibleCols.length === 0) return;
-    const colVal = possibleCols[Math.floor(Math.random() * possibleCols.length)];
-
-    const possibleRows = [];
-    for (let r = rowStart; r <= rowEnd; r += 2) {
-      possibleRows.push(r);
-    }
-    const gapRow = possibleRows[Math.floor(Math.random() * possibleRows.length)];
-
-    for (let r = rowStart; r <= rowEnd; r++) {
-      if (r === gapRow) continue;
-      const node = grid[r][colVal];
-      if (node.isStart || node.isTarget) continue;
-      node.isWall = true;
-      node.domElement.classList.add("node-wall");
-      await sleep(5);
-    }
-
-    // Recurse left and right divisions
-    await recursiveDivision(rowStart, rowEnd, colStart, colVal - 1, chooseOrientation(rowEnd - rowStart, colVal - 1 - colStart));
-    await recursiveDivision(rowStart, rowEnd, colVal + 1, colEnd, chooseOrientation(rowEnd - rowStart, colEnd - (colVal + 1)));
-  }
-}
-
-function chooseOrientation(width, height) {
-  if (width < height) return "horizontal";
-  if (height < width) return "vertical";
-  return Math.random() < 0.5 ? "horizontal" : "vertical";
-}
-
-// 2. Randomized DFS Maze Carver
-async function dfsBacktrackMaze() {
-  // First make everything a wall
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const node = grid[r][c];
-      if (!node.isStart && !node.isTarget) {
-        node.isWall = true;
-        node.domElement.classList.add("node-wall");
-      }
-    }
-  }
-
-  const stack = [];
-  const startR = 1, startC = 1;
-  grid[startR][startC].isWall = false;
-  grid[startR][startC].domElement.classList.remove("node-wall");
-  stack.push(grid[startR][startC]);
-
-  const visitedMaze = new Set();
-  visitedMaze.add(`${startR}-${startC}`);
-
-  while (stack.length > 0) {
-    const current = stack[stack.length - 1];
-    const neighbors = [];
-    const dirs = [
-      [-2, 0], [2, 0], [0, -2], [0, 2]
-    ];
-
-    for (const [dr, dc] of dirs) {
-      const nr = current.row + dr;
-      const nc = current.col + dc;
-      if (nr > 0 && nr < ROWS - 1 && nc > 0 && nc < COLS - 1) {
-        if (!visitedMaze.has(`${nr}-${nc}`)) {
-          neighbors.push(grid[nr][nc]);
-        }
-      }
-    }
-
-    if (neighbors.length > 0) {
-      // Pick random neighbor
-      const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-      
-      // Carve passage between current and next
-      const wallR = current.row + (next.row - current.row) / 2;
-      const wallC = current.col + (next.col - current.col) / 2;
-
-      // Unwall next and intermediate wall
-      next.isWall = false;
-      next.domElement.classList.remove("node-wall");
-      
-      grid[wallR][wallC].isWall = false;
-      grid[wallR][wallC].domElement.classList.remove("node-wall");
-
-      visitedMaze.add(`${next.row}-${next.col}`);
-      stack.push(next);
-      await sleep(10);
-    } else {
-      stack.pop();
-    }
-  }
-
-  // Ensure start & target nodes are clear of walls
-  grid[startNode.row][startNode.col].isWall = false;
-  grid[startNode.row][startNode.col].domElement.classList.remove("node-wall");
-  grid[targetNode.row][targetNode.col].isWall = false;
-  grid[targetNode.row][targetNode.col].domElement.classList.remove("node-wall");
-}
-
-/* ==========================================================================
-   Control Actions & Coordination
-   ========================================================================== */
-async function triggerVisualization() {
-  if (isRunning) return;
-  isRunning = true;
-  clearPathAndVisited();
-
-  const algo = document.getElementById("select-algo").value;
-  activeAlgorithm = algo;
-
-  const tStart = performance.now();
-  let visitedNodes = [];
-
-  if (algo === "astar") {
-    visitedNodes = await solveAStar(false);
-  } else if (algo === "dijkstra") {
-    visitedNodes = await solveDijkstra(false);
-  } else if (algo === "bfs") {
-    visitedNodes = await solveBFS(false);
-  } else if (algo === "dfs") {
-    visitedNodes = await solveDFS(false);
-  }
-
-  const tEnd = performance.now();
-  const timeTaken = (tEnd - tStart).toFixed(1);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (formatDateKey(d) === formatDateKey(yesterday)) return 'Yesterday';
   
-  // Set metrics
-  document.getElementById("metric-time").innerHTML = `${timeTaken} <span class="metric-unit">ms</span>`;
-  document.getElementById("metric-visited").innerText = visitedNodes.length;
-
-  const pathNodes = getShortestPathNodes();
-  await animateShortestPath(pathNodes, false);
-
-  isRunning = false;
-  isSolved = true;
-}
-
-// Instant recalculation on Node dragging
-function triggerInstantRecalculate() {
-  // Clear path structures synchronously
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const node = grid[r][c];
-      node.isVisited = false;
-      node.isPath = false;
-      node.distance = Infinity;
-      node.g = Infinity;
-      node.h = Infinity;
-      node.f = Infinity;
-      node.previousNode = null;
-      node.domElement.classList.remove("node-visited", "node-visited-weight", "node-shortest-path", "node-path-weight");
-    }
-  }
-
-  const algo = activeAlgorithm;
-  let visitedNodes = [];
-
-  // Run searches synchronously (instant = true)
-  if (algo === "astar") {
-    solveAStar(true);
-  } else if (algo === "dijkstra") {
-    solveDijkstra(true);
-  } else if (algo === "bfs") {
-    solveBFS(true);
-  } else if (algo === "dfs") {
-    solveDFS(true);
-  }
-
-  const pathNodes = getShortestPathNodes();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  if (formatDateKey(d) === formatDateKey(tomorrow)) return 'Tomorrow';
   
-  // Paint DOM instantly
-  // Filter visited nodes
-  const visitedArray = [];
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      if (grid[r][c].isVisited) visitedArray.push(grid[r][c]);
-    }
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+}
+
+function getDayOfWeek(date) {
+  return DAY_FULL[new Date(date).getDay()];
+}
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ==========================================
+// Tab Navigation
+// ==========================================
+function switchTab(tabName) {
+  currentTab = tabName;
+
+  // Update tab buttons
+  document.querySelectorAll('.tab-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  // Update tab views
+  document.querySelectorAll('.tab-view').forEach(view => {
+    view.classList.toggle('active', view.id === `view-${tabName}`);
+  });
+
+  // Show/hide FAB based on tab
+  const fab = document.getElementById('fab-add');
+  if (tabName === 'dashboard' || tabName === 'settings') {
+    fab.classList.add('hidden');
+  } else {
+    fab.classList.remove('hidden');
   }
 
-  drawInstantVisualization(visitedArray, pathNodes);
-  document.getElementById("metric-visited").innerText = visitedArray.length;
+  // Re-render active tab content
+  renderCurrentTab();
 }
 
-// UI State Updates
-function updateAlgoExplanation() {
-  const select = document.getElementById("select-algo");
-  const data = ALGO_DATA[select.value];
-  if (!data) return;
-
-  document.getElementById("info-algo-name").innerText = data.name;
-  document.getElementById("info-time-complexity").innerText = data.time;
-  document.getElementById("info-space-complexity").innerText = data.space;
-  document.getElementById("info-algo-desc").innerHTML = data.desc;
+function renderCurrentTab() {
+  switch (currentTab) {
+    case 'dashboard': renderDashboard(); break;
+    case 'workout': renderWorkouts(); break;
+    case 'diet': renderDiet(); break;
+    case 'mealplan': renderMealPlan(); break;
+    case 'settings': renderSettings(); break;
+  }
 }
 
-/* ==========================================================================
-   Presentation Slides Controllers
-   ========================================================================== */
-let currentSlide = 1;
-const TOTAL_SLIDES = 8;
+// ==========================================
+// Date Navigation
+// ==========================================
+function updateDateDisplay() {
+  document.getElementById('date-display').textContent = formatDisplayDate(currentDate);
+}
 
-function initPresentation() {
-  const dotsContainer = document.querySelector(".slide-dots");
-  dotsContainer.innerHTML = "";
+function navigateDate(offset) {
+  currentDate.setDate(currentDate.getDate() + offset);
+  updateDateDisplay();
+  renderCurrentTab();
+}
 
-  for (let i = 1; i <= TOTAL_SLIDES; i++) {
-    const dot = document.createElement("div");
-    dot.className = `slide-dot ${i === 1 ? 'active' : ''}`;
-    dot.addEventListener("click", () => changeSlide(i));
-    dotsContainer.appendChild(dot);
+// ==========================================
+// Dashboard Rendering
+// ==========================================
+function renderDashboard() {
+  const dateKey = formatDateKey(currentDate);
+  const workouts = appData.workouts[dateKey] || [];
+  const meals = appData.meals[dateKey] || [];
+  const streak = calculateStreak();
+  const volume = calculateVolume(workouts);
+
+  // Stats
+  document.getElementById('stat-workouts').textContent = workouts.length;
+  document.getElementById('stat-meals').textContent = meals.length;
+  document.getElementById('stat-streak').textContent = streak;
+  document.getElementById('stat-volume').textContent = volume > 0 ? formatVolume(volume) : '0';
+
+  // Discipline Score
+  renderDisciplineScore(workouts.length, meals.length);
+
+  // Streak Bar
+  renderStreakBar();
+
+  // Quote
+  renderQuote();
+}
+
+function renderDisciplineScore(workoutCount, mealCount) {
+  const goalW = appData.settings.goalWorkouts || 3;
+  const goalM = appData.settings.goalMeals || 4;
+  const wpct = Math.min(workoutCount / goalW, 1);
+  const mpct = Math.min(mealCount / goalM, 1);
+  const score = Math.round(((wpct + mpct) / 2) * 100);
+
+  const circumference = 2 * Math.PI * 42; // r=42
+  const offset = circumference - (score / 100) * circumference;
+
+  const ring = document.getElementById('discipline-ring-fill');
+  ring.style.strokeDashoffset = offset;
+
+  document.getElementById('discipline-percent').textContent = `${score}%`;
+
+  // Update streak data for today
+  const dateKey = formatDateKey(currentDate);
+  const today = formatDateKey(new Date());
+  if (dateKey === today && score >= 50) {
+    appData.streaks[dateKey] = true;
+    saveData();
+  }
+}
+
+function calculateVolume(workouts) {
+  return workouts.reduce((total, ex) => {
+    return total + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0);
+  }, 0);
+}
+
+function formatVolume(vol) {
+  if (vol >= 10000) return (vol / 1000).toFixed(1) + 'k';
+  return vol.toLocaleString();
+}
+
+function calculateStreak() {
+  let streak = 0;
+  const today = new Date();
+  const d = new Date(today);
+  
+  while (true) {
+    const key = formatDateKey(d);
+    if (appData.streaks[key]) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else {
+      // If it's today and not yet completed, check yesterday
+      if (formatDateKey(d) === formatDateKey(today)) {
+        d.setDate(d.getDate() - 1);
+        continue;
+      }
+      break;
+    }
+  }
+  return streak;
+}
+
+function renderStreakBar() {
+  const container = document.getElementById('streak-days');
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay()); // Start from Sunday
+
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    const key = formatDateKey(d);
+    const isToday = formatDateKey(d) === formatDateKey(today);
+    const completed = appData.streaks[key] === true;
+    const dayLabel = DAY_NAMES[d.getDay()];
+
+    let dotClass = 'streak-day-dot';
+    if (completed) dotClass += ' completed';
+    if (isToday) dotClass += ' today';
+
+    html += `
+      <div class="streak-day">
+        <span class="streak-day-label">${dayLabel}</span>
+        <div class="${dotClass}">${completed ? '✓' : d.getDate()}</div>
+      </div>
+    `;
+  }
+  container.innerHTML = html;
+}
+
+function renderQuote() {
+  // Pick a quote based on the day so it stays consistent
+  const dayIndex = Math.floor(currentDate.getTime() / 86400000) % QUOTES.length;
+  const quote = QUOTES[dayIndex];
+  document.getElementById('quote-text').textContent = quote.text;
+  document.getElementById('quote-author').textContent = `— ${quote.author}`;
+}
+
+// ==========================================
+// Workout Tab
+// ==========================================
+function renderWorkouts() {
+  const dateKey = formatDateKey(currentDate);
+  const workouts = appData.workouts[dateKey] || [];
+  const container = document.getElementById('workout-list');
+
+  // Summary
+  let totalSets = 0, totalReps = 0, totalVolume = 0;
+  workouts.forEach(w => {
+    totalSets += w.sets || 0;
+    totalReps += (w.sets || 0) * (w.reps || 0);
+    totalVolume += (w.sets || 0) * (w.reps || 0) * (w.weight || 0);
+  });
+
+  document.getElementById('workout-total-exercises').textContent = workouts.length;
+  document.getElementById('workout-total-sets').textContent = totalSets;
+  document.getElementById('workout-total-reps').textContent = totalReps;
+  document.getElementById('workout-total-volume').textContent = totalVolume > 0 ? formatVolume(totalVolume) : '0';
+
+  if (workouts.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🏋️</div>
+        <div class="empty-state-text">No exercises logged yet.<br>Tap + to add your first exercise!</div>
+      </div>
+    `;
+    return;
   }
 
-  document.getElementById("slide-prev").addEventListener("click", () => {
-    if (currentSlide > 1) {
-      changeSlide(currentSlide - 1);
-    }
-  });
-
-  document.getElementById("slide-next").addEventListener("click", () => {
-    if (currentSlide < TOTAL_SLIDES) {
-      changeSlide(currentSlide + 1);
-    } else {
-      document.getElementById("presentation-modal").classList.add("hidden");
-    }
-  });
-
-  document.getElementById("presentation-close").addEventListener("click", () => {
-    document.getElementById("presentation-modal").classList.add("hidden");
-  });
-
-  document.getElementById("btn-presentation").addEventListener("click", () => {
-    document.getElementById("presentation-modal").classList.remove("hidden");
-    changeSlide(1);
-  });
+  const unit = appData.settings.weightUnit || 'kg';
+  container.innerHTML = workouts.map(w => `
+    <div class="entry-item" data-id="${w.id}">
+      <div class="entry-icon workout-icon">💪</div>
+      <div class="entry-details">
+        <div class="entry-name">${escapeHtml(w.name)}</div>
+        <div class="entry-meta">${w.sets} sets × ${w.reps} reps${w.weight ? ` @ ${w.weight} ${unit}` : ''}${w.notes ? ' · ' + escapeHtml(w.notes) : ''}</div>
+      </div>
+      <div class="entry-actions">
+        <button class="entry-action-btn delete" onclick="deleteWorkout('${w.id}')" aria-label="Delete exercise">🗑</button>
+      </div>
+    </div>
+  `).join('');
 }
 
-function changeSlide(slideNum) {
-  currentSlide = slideNum;
+function addWorkout() {
+  const name = document.getElementById('workout-name').value.trim();
+  const sets = parseInt(document.getElementById('workout-sets').value) || 0;
+  const reps = parseInt(document.getElementById('workout-reps').value) || 0;
+  const weight = parseFloat(document.getElementById('workout-weight').value) || 0;
+  const notes = document.getElementById('workout-notes').value.trim();
 
-  const slides = document.querySelectorAll(".slide");
-  slides.forEach(slide => {
-    if (parseInt(slide.getAttribute("data-slide")) === slideNum) {
-      slide.classList.add("slide-active");
-    } else {
-      slide.classList.remove("slide-active");
-    }
+  if (!name) { showToast('Please enter an exercise name'); return; }
+  if (!sets || !reps) { showToast('Please enter sets and reps'); return; }
+
+  const dateKey = formatDateKey(currentDate);
+  if (!appData.workouts[dateKey]) appData.workouts[dateKey] = [];
+
+  appData.workouts[dateKey].push({
+    id: generateId(),
+    name, sets, reps, weight, notes,
+    timestamp: Date.now()
   });
 
-  const dots = document.querySelectorAll(".slide-dot");
-  dots.forEach((dot, index) => {
-    if (index + 1 === slideNum) {
-      dot.classList.add("active");
-    } else {
-      dot.classList.remove("active");
-    }
-  });
-
-  const btnPrev = document.getElementById("slide-prev");
-  const btnNext = document.getElementById("slide-next");
-
-  btnPrev.style.visibility = slideNum === 1 ? "hidden" : "visible";
-  btnNext.innerText = slideNum === TOTAL_SLIDES ? "Finish" : "Next →";
+  saveData();
+  closeModal('modal-workout');
+  clearWorkoutForm();
+  renderWorkouts();
+  showToast('💪 Exercise added!');
 }
 
-/* ==========================================================================
-   Page Initialize & DOM Bindings
-   ========================================================================== */
-document.addEventListener("DOMContentLoaded", () => {
-  initGrid();
-  updateAlgoExplanation();
-  initPresentation();
+function deleteWorkout(id) {
+  const dateKey = formatDateKey(currentDate);
+  if (!appData.workouts[dateKey]) return;
+  appData.workouts[dateKey] = appData.workouts[dateKey].filter(w => w.id !== id);
+  if (appData.workouts[dateKey].length === 0) delete appData.workouts[dateKey];
+  saveData();
+  renderWorkouts();
+  showToast('Exercise removed');
+}
 
-  // Control Listeners
-  document.getElementById("btn-run").addEventListener("click", triggerVisualization);
-  document.getElementById("btn-clear-all").addEventListener("click", clearAll);
-  document.getElementById("btn-clear-path").addEventListener("click", clearPathAndVisited);
-  document.getElementById("btn-generate-maze").addEventListener("click", generateMaze);
+function clearWorkoutForm() {
+  document.getElementById('workout-name').value = '';
+  document.getElementById('workout-sets').value = '';
+  document.getElementById('workout-reps').value = '';
+  document.getElementById('workout-weight').value = '';
+  document.getElementById('workout-notes').value = '';
+}
 
-  // Selector update Explanation text
-  document.getElementById("select-algo").addEventListener("change", (e) => {
-    activeAlgorithm = e.target.value;
-    updateAlgoExplanation();
-    if (isSolved) {
-      triggerInstantRecalculate();
+// ==========================================
+// Diet Tab
+// ==========================================
+function renderDiet() {
+  const dateKey = formatDateKey(currentDate);
+  const meals = appData.meals[dateKey] || [];
+  const dayOfWeek = getDayOfWeek(currentDate);
+  const planned = appData.mealPlan[dayOfWeek] || [];
+  const checked = appData.mealPlanChecked[dateKey] || {};
+
+  // Summary
+  const completedCount = planned.filter(p => checked[p.id]).length;
+  document.getElementById('diet-total-meals').textContent = meals.length;
+  document.getElementById('diet-planned').textContent = planned.length;
+  document.getElementById('diet-completed').textContent = completedCount;
+
+  // Planned meals
+  const plannedContainer = document.getElementById('diet-planned-list');
+  if (planned.length === 0) {
+    plannedContainer.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-text">No planned meals for today.<br>Go to Meal Plan tab to create a plan!</div>
+      </div>
+    `;
+  } else {
+    plannedContainer.innerHTML = planned.map(p => {
+      const isChecked = checked[p.id] === true;
+      return `
+        <div class="entry-item${isChecked ? ' completed' : ''}">
+          <button class="entry-checkbox${isChecked ? ' checked' : ''}" onclick="togglePlannedMeal('${p.id}')" aria-label="Mark as eaten">${isChecked ? '✓' : ''}</button>
+          <div class="entry-icon meal-icon">${MEAL_ICONS[p.type] || '🍽️'}</div>
+          <div class="entry-details">
+            <div class="entry-name">${escapeHtml(p.name)}</div>
+            <div class="entry-meta">${capitalize(p.type)}${p.portion ? ' · ' + escapeHtml(p.portion) : ''}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Logged meals
+  const eatenContainer = document.getElementById('diet-eaten-list');
+  if (meals.length === 0) {
+    eatenContainer.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🍽️</div>
+        <div class="empty-state-text">No meals logged yet.<br>Tap + to log what you ate!</div>
+      </div>
+    `;
+  } else {
+    eatenContainer.innerHTML = meals.map(m => `
+      <div class="entry-item" data-id="${m.id}">
+        <div class="entry-icon meal-icon">${MEAL_ICONS[m.type] || '🍽️'}</div>
+        <div class="entry-details">
+          <div class="entry-name">${escapeHtml(m.name)}</div>
+          <div class="entry-meta">${capitalize(m.type)}${m.portion ? ' · ' + escapeHtml(m.portion) : ''}${m.notes ? ' · ' + escapeHtml(m.notes) : ''}</div>
+        </div>
+        <div class="entry-actions">
+          <button class="entry-action-btn delete" onclick="deleteMeal('${m.id}')" aria-label="Delete meal">🗑</button>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+function addMeal() {
+  const name = document.getElementById('meal-name').value.trim();
+  const portion = document.getElementById('meal-portion').value.trim();
+  const type = document.getElementById('meal-type').value;
+  const notes = document.getElementById('meal-notes').value.trim();
+
+  if (!name) { showToast('Please enter a meal name'); return; }
+
+  const dateKey = formatDateKey(currentDate);
+  if (!appData.meals[dateKey]) appData.meals[dateKey] = [];
+
+  appData.meals[dateKey].push({
+    id: generateId(),
+    name, portion, type, notes,
+    timestamp: Date.now()
+  });
+
+  saveData();
+  closeModal('modal-meal');
+  clearMealForm();
+  renderDiet();
+  showToast('🍽️ Meal logged!');
+}
+
+function deleteMeal(id) {
+  const dateKey = formatDateKey(currentDate);
+  if (!appData.meals[dateKey]) return;
+  appData.meals[dateKey] = appData.meals[dateKey].filter(m => m.id !== id);
+  if (appData.meals[dateKey].length === 0) delete appData.meals[dateKey];
+  saveData();
+  renderDiet();
+  showToast('Meal removed');
+}
+
+function togglePlannedMeal(planItemId) {
+  const dateKey = formatDateKey(currentDate);
+  if (!appData.mealPlanChecked[dateKey]) appData.mealPlanChecked[dateKey] = {};
+  
+  appData.mealPlanChecked[dateKey][planItemId] = !appData.mealPlanChecked[dateKey][planItemId];
+  saveData();
+  renderDiet();
+}
+
+function clearMealForm() {
+  document.getElementById('meal-name').value = '';
+  document.getElementById('meal-portion').value = '';
+  document.getElementById('meal-type').value = 'breakfast';
+  document.getElementById('meal-notes').value = '';
+}
+
+// ==========================================
+// Meal Plan Tab
+// ==========================================
+function renderMealPlan() {
+  // Update active day tab
+  document.querySelectorAll('.day-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.day === currentMealPlanDay);
+  });
+
+  const planned = appData.mealPlan[currentMealPlanDay] || [];
+  const container = document.getElementById('mealplan-list');
+
+  if (planned.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <div class="empty-state-text">No meals planned for ${capitalize(currentMealPlanDay)}.<br>Tap + to add a planned meal!</div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = planned.map(p => `
+    <div class="entry-item" data-id="${p.id}">
+      <div class="entry-icon plan-icon">${MEAL_ICONS[p.type] || '📝'}</div>
+      <div class="entry-details">
+        <div class="entry-name">${escapeHtml(p.name)}</div>
+        <div class="entry-meta">${capitalize(p.type)}${p.portion ? ' · ' + escapeHtml(p.portion) : ''}</div>
+      </div>
+      <div class="entry-actions">
+        <button class="entry-action-btn delete" onclick="deleteMealPlanItem('${p.id}')" aria-label="Delete planned meal">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addMealPlanItem() {
+  const name = document.getElementById('plan-name').value.trim();
+  const type = document.getElementById('plan-type').value;
+  const portion = document.getElementById('plan-portion').value.trim();
+
+  if (!name) { showToast('Please enter a meal name'); return; }
+
+  if (!appData.mealPlan[currentMealPlanDay]) appData.mealPlan[currentMealPlanDay] = [];
+
+  appData.mealPlan[currentMealPlanDay].push({
+    id: generateId(),
+    name, type, portion
+  });
+
+  saveData();
+  closeModal('modal-mealplan');
+  clearMealPlanForm();
+  renderMealPlan();
+  showToast('📋 Meal plan updated!');
+}
+
+function deleteMealPlanItem(id) {
+  if (!appData.mealPlan[currentMealPlanDay]) return;
+  appData.mealPlan[currentMealPlanDay] = appData.mealPlan[currentMealPlanDay].filter(p => p.id !== id);
+  saveData();
+  renderMealPlan();
+  showToast('Plan item removed');
+}
+
+function clearMealPlanForm() {
+  document.getElementById('plan-name').value = '';
+  document.getElementById('plan-type').value = 'breakfast';
+  document.getElementById('plan-portion').value = '';
+}
+
+// ==========================================
+// Settings
+// ==========================================
+function renderSettings() {
+  const s = appData.settings;
+  document.getElementById('settings-name-display').textContent = s.name || 'Tap to set';
+  document.getElementById('settings-goals-display').textContent =
+    `${s.goalWorkouts || 3} exercises, ${s.goalMeals || 4} meals`;
+
+  // Weight unit toggle
+  const toggle = document.getElementById('toggle-unit');
+  if (s.weightUnit === 'lbs') {
+    toggle.classList.add('active');
+  } else {
+    toggle.classList.remove('active');
+  }
+}
+
+function saveName() {
+  const name = document.getElementById('setting-name-input').value.trim();
+  appData.settings.name = name;
+  saveData();
+  closeModal('modal-name');
+  renderSettings();
+  showToast('Name saved!');
+}
+
+function saveGoals() {
+  const goalW = parseInt(document.getElementById('goal-workouts').value) || 3;
+  const goalM = parseInt(document.getElementById('goal-meals').value) || 4;
+  appData.settings.goalWorkouts = goalW;
+  appData.settings.goalMeals = goalM;
+  saveData();
+  closeModal('modal-goals');
+  renderSettings();
+  showToast('Goals updated!');
+}
+
+function toggleWeightUnit() {
+  appData.settings.weightUnit = appData.settings.weightUnit === 'kg' ? 'lbs' : 'kg';
+  saveData();
+  renderSettings();
+  if (currentTab === 'workout') renderWorkouts();
+  showToast(`Weight unit: ${appData.settings.weightUnit.toUpperCase()}`);
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `disciplinex-backup-${formatDateKey(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('📤 Data exported!');
+}
+
+function importData() {
+  document.getElementById('import-file-input').click();
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (imported.settings && imported.workouts !== undefined) {
+        appData = imported;
+        saveData();
+        renderCurrentTab();
+        showToast('📥 Data imported successfully!');
+      } else {
+        showToast('Invalid backup file');
+      }
+    } catch (err) {
+      showToast('Error reading file');
     }
-  });
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
 
-  // Brush toggles
-  document.getElementById("brush-wall").addEventListener("click", () => {
-    currentBrushMode = "wall";
-    updateBrushButtons();
-  });
-  document.getElementById("brush-weight").addEventListener("click", () => {
-    currentBrushMode = "weight";
-    updateBrushButtons();
-  });
+function clearAllData() {
+  if (confirm('Are you sure you want to clear ALL data? This cannot be undone!')) {
+    appData = getDefaultData();
+    saveData();
+    renderCurrentTab();
+    showToast('🗑️ All data cleared');
+  }
+}
 
-  // Speed Slider
-  const slider = document.getElementById("speed-slider");
-  slider.addEventListener("input", (e) => {
-    currentSpeed = SPEED_MAP[parseInt(e.target.value)];
-  });
-
-  // Modal Tutorial Handlers
-  const modal = document.getElementById("tutorial-modal");
-  document.getElementById("btn-tutorial").addEventListener("click", () => {
-    modal.classList.remove("hidden");
-  });
-  document.getElementById("modal-close").addEventListener("click", () => {
-    modal.classList.add("hidden");
-  });
-  document.getElementById("modal-btn-start").addEventListener("click", () => {
-    modal.classList.add("hidden");
-  });
-
-  // Display tutorial modal initially on first load
+// ==========================================
+// Modal Management
+// ==========================================
+function openModal(modalId) {
+  const modal = document.getElementById(modalId);
+  modal.classList.add('active');
+  // Focus first input
   setTimeout(() => {
-    modal.classList.remove("hidden");
-  }, 500);
+    const input = modal.querySelector('input:not([type=file])');
+    if (input) input.focus();
+  }, 350);
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.remove('active');
+}
+
+// Close on backdrop click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.classList.remove('active');
+    }
+  });
 });
+
+// ==========================================
+// FAB Handler
+// ==========================================
+function handleFab() {
+  switch (currentTab) {
+    case 'workout':
+      openModal('modal-workout');
+      break;
+    case 'diet':
+      openModal('modal-meal');
+      break;
+    case 'mealplan':
+      openModal('modal-mealplan');
+      break;
+  }
+}
+
+// ==========================================
+// PWA Install Prompt
+// ==========================================
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.getElementById('install-banner').classList.remove('hidden');
+});
+
+function handleInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then((result) => {
+    if (result.outcome === 'accepted') {
+      showToast('🎉 App installed!');
+    }
+    deferredInstallPrompt = null;
+    document.getElementById('install-banner').classList.add('hidden');
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('install-banner').classList.add('hidden');
+  deferredInstallPrompt = null;
+});
+
+// ==========================================
+// Utility: HTML Escape
+// ==========================================
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function capitalize(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// ==========================================
+// Event Listeners
+// ==========================================
+function initEventListeners() {
+  // Tab bar
+  document.querySelectorAll('.tab-item').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Date navigation
+  document.getElementById('date-prev').addEventListener('click', () => navigateDate(-1));
+  document.getElementById('date-next').addEventListener('click', () => navigateDate(1));
+
+  // FAB
+  document.getElementById('fab-add').addEventListener('click', handleFab);
+
+  // Quick actions (dashboard)
+  document.getElementById('quick-workout').addEventListener('click', () => {
+    switchTab('workout');
+    setTimeout(() => openModal('modal-workout'), 350);
+  });
+  document.getElementById('quick-meal').addEventListener('click', () => {
+    switchTab('diet');
+    setTimeout(() => openModal('modal-meal'), 350);
+  });
+
+  // Workout modal
+  document.getElementById('modal-workout-save').addEventListener('click', addWorkout);
+  document.getElementById('modal-workout-cancel').addEventListener('click', () => closeModal('modal-workout'));
+
+  // Meal modal
+  document.getElementById('modal-meal-save').addEventListener('click', addMeal);
+  document.getElementById('modal-meal-cancel').addEventListener('click', () => closeModal('modal-meal'));
+
+  // Meal plan modal
+  document.getElementById('modal-mealplan-save').addEventListener('click', addMealPlanItem);
+  document.getElementById('modal-mealplan-cancel').addEventListener('click', () => closeModal('modal-mealplan'));
+
+  // Name modal
+  document.getElementById('setting-name').addEventListener('click', () => {
+    document.getElementById('setting-name-input').value = appData.settings.name || '';
+    openModal('modal-name');
+  });
+  document.getElementById('modal-name-save').addEventListener('click', saveName);
+  document.getElementById('modal-name-cancel').addEventListener('click', () => closeModal('modal-name'));
+
+  // Goals modal
+  document.getElementById('setting-goals').addEventListener('click', () => {
+    document.getElementById('goal-workouts').value = appData.settings.goalWorkouts || 3;
+    document.getElementById('goal-meals').value = appData.settings.goalMeals || 4;
+    openModal('modal-goals');
+  });
+  document.getElementById('modal-goals-save').addEventListener('click', saveGoals);
+  document.getElementById('modal-goals-cancel').addEventListener('click', () => closeModal('modal-goals'));
+
+  // Settings actions
+  document.getElementById('toggle-unit').addEventListener('click', toggleWeightUnit);
+  document.getElementById('setting-export').addEventListener('click', exportData);
+  document.getElementById('setting-import').addEventListener('click', importData);
+  document.getElementById('import-file-input').addEventListener('change', handleImportFile);
+  document.getElementById('setting-clear').addEventListener('click', clearAllData);
+
+  // Meal plan day tabs
+  document.querySelectorAll('.day-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentMealPlanDay = tab.dataset.day;
+      renderMealPlan();
+    });
+  });
+
+  // Install
+  document.getElementById('install-btn').addEventListener('click', handleInstall);
+
+  // Enter key in modals
+  document.querySelectorAll('.modal-sheet input').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const modal = input.closest('.modal-overlay');
+        const saveBtn = modal.querySelector('.btn-primary');
+        if (saveBtn) saveBtn.click();
+      }
+    });
+  });
+}
+
+// ==========================================
+// Initialization
+// ==========================================
+function init() {
+  updateDateDisplay();
+  initEventListeners();
+  renderDashboard();
+  
+  // Set current day as active meal plan tab
+  const todayDayName = getDayOfWeek(new Date());
+  currentMealPlanDay = todayDayName;
+}
+
+// Boot
+document.addEventListener('DOMContentLoaded', init);

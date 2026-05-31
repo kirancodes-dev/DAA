@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="flame512" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="60%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.7"/>
+    </linearGradient>
+    <filter id="glow512">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#0a0e1a"/>
+
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="220" fill="none" stroke="url(#grad512)" stroke-width="6" opacity="0.3"/>
+
+  <!-- Inner subtle ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="url(#grad512)" stroke-width="2" opacity="0.15"/>
+
+  <!-- Dumbbell bar -->
+  <rect x="116" y="238" width="280" height="36" rx="18" fill="url(#grad512)" filter="url(#glow512)"/>
+
+  <!-- Left weight plates -->
+  <rect x="82" y="182" width="50" height="148" rx="14" fill="url(#grad512)"/>
+  <rect x="48" y="200" width="40" height="112" rx="12" fill="url(#grad512)" opacity="0.8"/>
+
+  <!-- Right weight plates -->
+  <rect x="380" y="182" width="50" height="148" rx="14" fill="url(#grad512)"/>
+  <rect x="424" y="200" width="40" height="112" rx="12" fill="url(#grad512)" opacity="0.8"/>
+
+  <!-- Flame / energy icon above the bar -->
+  <path d="M256 80 C256 80, 204 148, 204 180 C204 210, 228 232, 256 232 C284 232, 308 210, 308 180 C308 148, 256 80, 256 80Z"
+        fill="url(#flame512)" opacity="0.9" filter="url(#glow512)"/>
+  <path d="M256 126 C256 126, 232 160, 232 176 C232 190, 242 200, 256 200 C270 200, 280 190, 280 176 C280 160, 256 126, 256 126Z"
+        fill="#0a0e1a" opacity="0.6"/>
+
+  <!-- Bottom accent arc -->
+  <path d="M140 400 Q256 456 372 400" fill="none" stroke="url(#grad512)" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Small accent dots -->
+  <circle cx="140" cy="400" r="5" fill="#10b981" opacity="0.6"/>
+  <circle cx="372" cy="400" r="5" fill="#06b6d4" opacity="0.6"/>
+</svg>

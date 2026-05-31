@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="grad192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="flame192" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="60%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="96" cy="96" r="96" fill="#0a0e1a"/>
+
+  <!-- Outer ring -->
+  <circle cx="96" cy="96" r="82" fill="none" stroke="url(#grad192)" stroke-width="4" opacity="0.3"/>
+
+  <!-- Dumbbell bar -->
+  <rect x="46" y="90" width="100" height="12" rx="6" fill="url(#grad192)"/>
+
+  <!-- Left weight plates -->
+  <rect x="34" y="70" width="18" height="52" rx="5" fill="url(#grad192)"/>
+  <rect x="22" y="78" width="14" height="36" rx="4" fill="url(#grad192)" opacity="0.8"/>
+
+  <!-- Right weight plates -->
+  <rect x="140" y="70" width="18" height="52" rx="5" fill="url(#grad192)"/>
+  <rect x="156" y="78" width="14" height="36" rx="4" fill="url(#grad192)" opacity="0.8"/>
+
+  <!-- Flame / energy icon above the bar -->
+  <path d="M96 34 C96 34, 78 58, 78 70 C78 80, 86 88, 96 88 C106 88, 114 80, 114 70 C114 58, 96 34, 96 34Z"
+        fill="url(#flame192)" opacity="0.9"/>
+  <path d="M96 50 C96 50, 88 62, 88 68 C88 73, 91 76, 96 76 C101 76, 104 73, 104 68 C104 62, 96 50, 96 50Z"
+        fill="#0a0e1a" opacity="0.6"/>
+
+  <!-- Bottom accent arc -->
+  <path d="M56 148 Q96 168 136 148" fill="none" stroke="url(#grad192)" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+</svg>
